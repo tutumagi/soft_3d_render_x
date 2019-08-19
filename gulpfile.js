@@ -54,7 +54,7 @@ if (watchify) {
         browserSync.init({
             port: 3002,
             server: {
-                watchFiles: ["./dist/"],
+                watchFiles: ["./dist/", "index.html"],
                 baseDir: "./"
             }
         });
