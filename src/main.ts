@@ -11,13 +11,21 @@ export namespace SoftEngine {
         }
     }
 
+    export interface Face {
+        A: number;
+        B: number;
+        C: number;
+    }
+
     export class Mesh {
         public postion: BABYLON.Vector3;
         public rotation: BABYLON.Vector3;
         public vertices: BABYLON.Vector3[];
+        public faces: Face[];
 
-        constructor(public name: string, verticesCount: number) {
+        constructor(public name: string, verticesCount: number, facesCount: number) {
             this.vertices = new Array(verticesCount);
+            this.faces = new Array(facesCount);
             this.rotation = BABYLON.Vector3.Zero();
             this.postion = BABYLON.Vector3.Zero();
         }
@@ -75,6 +83,22 @@ export namespace SoftEngine {
             }
         }
 
+        /** 绘制线条 是一个 递归绘制起始点 - 中间点 - 结束点（总共 3 pixel）的过程 */
+        public drawLine(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
+            const dist = point1.subtract(point0).length();
+
+            if (dist < 2) {
+                return;
+            }
+
+            const middlePoint = point0.add(point1.subtract(point0).scale(0.5));
+
+            this.drawPoint(middlePoint);
+
+            this.drawLine(point0, middlePoint);
+            this.drawLine(middlePoint, point1);
+        }
+
         public render(camera: Camera, meshes: Mesh[]) {
             const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, BABYLON.Vector3.Up());
 
@@ -94,9 +118,34 @@ export namespace SoftEngine {
 
                 const transformMatrix = worldMatrix.multiply(viewMatrix).multiply(projectMatrix);
 
+                /** draw points */
                 for (const indexVertex of cMesh.vertices) {
                     const projectPoint = this.project(indexVertex, transformMatrix);
                     this.drawPoint(projectPoint);
+                }
+
+                /** draw lines */
+                // for (let i = 0; i < cMesh.vertices.length - 1; i++) {
+                //     const point0 = this.project(cMesh.vertices[i], transformMatrix);
+                //     const point1 = this.project(cMesh.vertices[i + 1], transformMatrix);
+                //     this.drawLine(point0, point1);
+                // }
+
+                /** draw faces */
+                for (let i = 0; i < cMesh.faces.length; i++) {
+                    const currentFace = cMesh.faces[i];
+
+                    const vertexA = cMesh.vertices[currentFace.A];
+                    const vertexB = cMesh.vertices[currentFace.B];
+                    const vertexC = cMesh.vertices[currentFace.C];
+
+                    const pixelA = this.project(vertexA, transformMatrix);
+                    const pixelB = this.project(vertexB, transformMatrix);
+                    const pixelC = this.project(vertexC, transformMatrix);
+
+                    this.drawLine(pixelA, pixelB);
+                    this.drawLine(pixelB, pixelC);
+                    this.drawLine(pixelC, pixelA);
                 }
             }
         }
