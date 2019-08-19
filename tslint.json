@@ -9,7 +9,8 @@
         "max-classes-per-file": false,
         "no-bitwise": false,
         "no-reference": false,
-        "interface-name": false
+        "interface-name": false,
+        "triple-equals": false
     },
     "rulesDirectory": []
 }

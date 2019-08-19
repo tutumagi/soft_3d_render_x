@@ -99,6 +99,36 @@ export namespace SoftEngine {
             this.drawLine(middlePoint, point1);
         }
 
+        public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
+            let x0 = point0.x >> 0;
+            let y0 = point0.y >> 0;
+            const x1 = point1.x >> 0;
+            const y1 = point1.y >> 0;
+            const dx = Math.abs(x1 - x0);
+            const dy = Math.abs(y1 - y0);
+
+            const sx = x0 < x1 ? 1 : -1;
+            const sy = y0 < y1 ? 1 : -1;
+
+            let err = dx - dy;
+
+            while (true) {
+                this.drawPoint(new BABYLON.Vector2(x0, y0));
+                if (x0 == x1 && y0 == y1) {
+                    break;
+                }
+                const e2 = 2 * err;
+                if (e2 > -dy) {
+                    err -= dy;
+                    x0 += sx;
+                }
+                if (e2 < dx) {
+                    err += dx;
+                    y0 += sy;
+                }
+            }
+        }
+
         public render(camera: Camera, meshes: Mesh[]) {
             const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, BABYLON.Vector3.Up());
 
@@ -146,6 +176,9 @@ export namespace SoftEngine {
                     this.drawLine(pixelA, pixelB);
                     this.drawLine(pixelB, pixelC);
                     this.drawLine(pixelC, pixelA);
+                    // this.drawBline(pixelA, pixelB);
+                    // this.drawBline(pixelB, pixelC);
+                    // this.drawBline(pixelC, pixelA);
                 }
             }
         }
