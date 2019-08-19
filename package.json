@@ -1,0 +1,31 @@
+{
+    "name": "soft_engin_3d",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "start": "gulp watch --gulpfile ./gulpfile.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "game",
+        "engine"
+    ],
+    "author": "tutu_magi",
+    "license": "MIT",
+    "dependencies": {
+        "@babel/core": "^7.5.5",
+        "babel-preset-es2015": "^6.24.1",
+        "babelify": "^10.0.0",
+        "browser-sync": "^2.26.7",
+        "browserify": "^16.5.0",
+        "gulp": "3.9.1",
+        "gulp-util": "^3.0.8",
+        "realpathify": "^1.0.1",
+        "run-sequence": "^2.2.1",
+        "tsify": "^4.0.1",
+        "typescript": "^3.5.3",
+        "vinyl-source-stream": "^2.0.0",
+        "watchify": "^3.11.1"
+    }
+}
