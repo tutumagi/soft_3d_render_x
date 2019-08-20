@@ -86,5 +86,5 @@ function drawingLoop() {
     device.present();
 
     // Calling the HTML5 rendering loop recursively
-    // requestAnimationFrame(drawingLoop);
+    requestAnimationFrame(drawingLoop);
 }
