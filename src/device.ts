@@ -123,10 +123,10 @@ export class Device {
         }
     }
 
-    public drawTraingle(p1: BABYLON.Vector3, p2: BABYLON.Vector3, p3: BABYLON.Vector3, color: BABYLON.Color4): void {
+    public drawTriangle(p1: BABYLON.Vector3, p2: BABYLON.Vector3, p3: BABYLON.Vector3, color: BABYLON.Color4): void {
         // Sorting the points in order to always have this order on screen p1, p2 & p3
         // with p1 always up (thus having the Y the lowest possible to be near the top screen)
-        // then p2 between p1 & p3
+        // then p2 between p1 & p3 (according to Y-axis up to down )
         if (p1.y > p2.y) {
             const temp = p2;
             p2 = p1;
@@ -180,8 +180,10 @@ export class Device {
         if (dP1P2 > dP1P3) {
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
                 if (y < p2.y) {
+                    // scan p1p3 p1p2
                     this.processScanLine(y, p1, p3, p1, p2, color);
                 } else {
+                    // scan p1p3 p2p3
                     this.processScanLine(y, p1, p3, p2, p3, color);
                 }
             }
@@ -189,8 +191,10 @@ export class Device {
             // p2 on left
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
                 if (y < p2.y) {
+                    // scan p1p2 p1p3
                     this.processScanLine(y, p1, p2, p1, p3, color);
                 } else {
+                    // scan p2p3 p1p3
                     this.processScanLine(y, p2, p3, p1, p3, color);
                 }
             }
@@ -296,7 +300,8 @@ export class Device {
 
                 const color: number = 0.25 + ((i % cMesh.faces.length) / cMesh.faces.length) * 0.75;
 
-                this.drawTraingle(pixelA, pixelB, pixelC, new BABYLON.Color4(color, color, color, 1));
+                /** draw triangle */
+                this.drawTriangle(pixelA, pixelB, pixelC, new BABYLON.Color4(color, color, color, 1));
 
                 // console.log(`draw ${vertexA.toString()} ${vertexB.toString()} ${vertexC.toString()}`);
             }
