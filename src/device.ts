@@ -221,7 +221,7 @@ export class Device {
      * [Bresenham's_line_algorithm](https://en.wikipedia.org/wiki/Bresenham's_line_algorithm)
      * 更平滑的绘制线条的算法
      */
-    public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
+    public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2, color: BABYLON.Color4): void {
         let x0 = point0.x >> 0;
         let y0 = point0.y >> 0;
         const x1 = point1.x >> 0;
@@ -235,7 +235,7 @@ export class Device {
         let err = dx - dy;
 
         while (true) {
-            this.drawPoint(new BABYLON.Vector2(x0, y0), new BABYLON.Color4(1, 1, 0, 1));
+            this.drawPoint(new BABYLON.Vector2(x0, y0), color);
             if (x0 == x1 && y0 == y1) {
                 break;
             }
