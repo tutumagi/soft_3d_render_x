@@ -27,7 +27,7 @@ if (watchify) {
             basedir: workSpaceDir,
             //是否开启调试，开启后会生成jsmap，方便调试ts源码，但会影响编译速度
             debug: DEBUG,
-            entries: ["src/app.ts"],
+            entries: ["src/main.ts"],
             cache: {},
             packageCache: {}
         })

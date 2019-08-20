@@ -1,4 +1,4 @@
-import { Camera, Device, Mesh } from "./main";
+import { Mesh } from "./mesh";
 
 export function loadJSONFileAsync(fileName: string, callback: (result: Mesh[]) => void): void {
     let jsonObject = {};
