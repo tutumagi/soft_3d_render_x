@@ -7,8 +7,10 @@ export class Device {
     private workingContext: CanvasRenderingContext2D;
     private workingWidth: number;
     private workingHeight: number;
-
+    // equals to backbuffer.data
     private backbufferdata?: Uint8ClampedArray;
+    // 缓存每个像素点的 z-buffer，如果后面绘制的z index 大于当前的，则忽略，否则覆盖当前的像素
+    private depthbuffer: number[];
 
     constructor(canvas: HTMLCanvasElement) {
         this.workingCanvas = canvas;
@@ -16,26 +18,39 @@ export class Device {
         this.workingHeight = canvas.height;
 
         this.workingContext = this.workingCanvas.getContext("2d")!;
+
+        this.depthbuffer = new Array(this.workingWidth * this.workingHeight);
     }
 
     public clear(): void {
         this.workingContext.clearRect(0, 0, this.workingWidth, this.workingHeight);
         this.backbuffer = this.workingContext.getImageData(0, 0, this.workingWidth, this.workingHeight);
+
+        for (let i = 0; i < this.depthbuffer.length; ++i) {
+            // 填一个大一点的数字
+            this.depthbuffer[i] = 1000000;
+        }
     }
 
     public present() {
         this.workingContext.putImageData(this.backbuffer!, 0, 0);
     }
 
-    public putPixel(x: number, y: number, color: BABYLON.Color4) {
+    public putPixel(x: number, y: number, z: number, color: BABYLON.Color4) {
         this.backbufferdata = this.backbuffer!.data;
 
-        const index: number = ((x >> 0) + (y >> 0) * this.workingWidth) * 4;
+        const index: number = (x >> 0) + (y >> 0) * this.workingWidth;
+        const index4: number = index * 4;
 
-        this.backbufferdata[index] = color.r * 255;
-        this.backbufferdata[index + 1] = color.g * 255;
-        this.backbufferdata[index + 2] = color.b * 255;
-        this.backbufferdata[index + 3] = color.a * 255;
+        if (this.depthbuffer[index] < z) {
+            return; // Discard
+        }
+        this.depthbuffer[index] = z;
+
+        this.backbufferdata[index4] = color.r * 255;
+        this.backbufferdata[index4 + 1] = color.g * 255;
+        this.backbufferdata[index4 + 2] = color.b * 255;
+        this.backbufferdata[index4 + 3] = color.a * 255;
     }
 
     /**
@@ -59,11 +74,11 @@ export class Device {
      * `drawPoint` calls putPixel but does the clipping operation before
      * @param point
      */
-    public drawPoint(point: BABYLON.Vector2, color: BABYLON.Color4) {
+    public drawPoint(point: BABYLON.Vector3, color: BABYLON.Color4) {
         // Clipping what's visible on screen
         if (point.x >= 0 && point.y >= 0 && point.x < this.workingWidth && point.y < this.workingHeight) {
             // Drawing a yellow point
-            this.putPixel(point.x, point.y, color);
+            this.putPixel(point.x, point.y, point.z, color);
         }
     }
 
@@ -117,9 +132,18 @@ export class Device {
         const sx = this.interpolate(pa.x, pb.x, gradient1) >> 0;
         const ex = this.interpolate(pc.x, pd.x, gradient2) >> 0;
 
+        // starting Z &  ending Z
+        const z1: number = this.interpolate(pa.z, pb.z, gradient1);
+        const z2: number = this.interpolate(pc.z, pd.z, gradient2);
+
         // drawing a line from left (sx) to right (ex)
         for (let x = sx; x < ex; x++) {
-            this.drawPoint(new BABYLON.Vector2(x, y), color);
+            // normalisation pour dessiner de gauche à droite
+            const gradient: number = (x - sx) / (ex - sx);
+
+            const z = this.interpolate(z1, z2, gradient);
+
+            this.drawPoint(new BABYLON.Vector3(x, y, z), color);
         }
     }
 
@@ -202,54 +226,54 @@ export class Device {
     }
 
     /** 绘制线条 是一个 递归绘制起始点 - 中间点 - 结束点（总共 3 pixel）的过程 */
-    public drawLine(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
-        const dist = point1.subtract(point0).length();
+    // public drawLine(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
+    //     const dist = point1.subtract(point0).length();
 
-        if (dist < 2) {
-            return;
-        }
+    //     if (dist < 2) {
+    //         return;
+    //     }
 
-        const middlePoint = point0.add(point1.subtract(point0).scale(0.5));
+    //     const middlePoint = point0.add(point1.subtract(point0).scale(0.5));
 
-        this.drawPoint(middlePoint, new BABYLON.Color4(1, 1, 0, 1));
+    //     this.drawPoint(middlePoint, new BABYLON.Color4(1, 1, 0, 1));
 
-        this.drawLine(point0, middlePoint);
-        this.drawLine(middlePoint, point1);
-    }
+    //     this.drawLine(point0, middlePoint);
+    //     this.drawLine(middlePoint, point1);
+    // }
 
     /**
      * [Bresenham's_line_algorithm](https://en.wikipedia.org/wiki/Bresenham's_line_algorithm)
      * 更平滑的绘制线条的算法
      */
-    public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2, color: BABYLON.Color4): void {
-        let x0 = point0.x >> 0;
-        let y0 = point0.y >> 0;
-        const x1 = point1.x >> 0;
-        const y1 = point1.y >> 0;
-        const dx = Math.abs(x1 - x0);
-        const dy = Math.abs(y1 - y0);
+    // public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2, color: BABYLON.Color4): void {
+    //     let x0 = point0.x >> 0;
+    //     let y0 = point0.y >> 0;
+    //     const x1 = point1.x >> 0;
+    //     const y1 = point1.y >> 0;
+    //     const dx = Math.abs(x1 - x0);
+    //     const dy = Math.abs(y1 - y0);
 
-        const sx = x0 < x1 ? 1 : -1;
-        const sy = y0 < y1 ? 1 : -1;
+    //     const sx = x0 < x1 ? 1 : -1;
+    //     const sy = y0 < y1 ? 1 : -1;
 
-        let err = dx - dy;
+    //     let err = dx - dy;
 
-        while (true) {
-            this.drawPoint(new BABYLON.Vector2(x0, y0), color);
-            if (x0 == x1 && y0 == y1) {
-                break;
-            }
-            const e2 = 2 * err;
-            if (e2 > -dy) {
-                err -= dy;
-                x0 += sx;
-            }
-            if (e2 < dx) {
-                err += dx;
-                y0 += sy;
-            }
-        }
-    }
+    //     while (true) {
+    //         this.drawPoint(new BABYLON.Vector2(x0, y0), color);
+    //         if (x0 == x1 && y0 == y1) {
+    //             break;
+    //         }
+    //         const e2 = 2 * err;
+    //         if (e2 > -dy) {
+    //             err -= dy;
+    //             x0 += sx;
+    //         }
+    //         if (e2 < dx) {
+    //             err += dx;
+    //             y0 += sy;
+    //         }
+    //     }
+    // }
 
     public render(camera: Camera, meshes: Mesh[]) {
         const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, BABYLON.Vector3.Up());
