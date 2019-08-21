@@ -76,8 +76,8 @@ function drawingLoop() {
 
     // rotating slightly the cube during each frame rendered
     meshes.forEach((mesh) => {
-        mesh.rotation.x += 0.01;
-        mesh.rotation.y += 0.01;
+        mesh.rotation.y = Math.PI;
+        // mesh.rotation.y += 0.01;
     });
 
     // Doing the various matrix operations
