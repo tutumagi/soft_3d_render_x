@@ -25,6 +25,8 @@ export function createMeshesFromJSON(jsonObject: any): Mesh[] {
         // Faces
         const indicesArray: number[] = meshObject.indices;
 
+        const normals: number[] = meshObject.normals;
+
         const verticesCount = meshObject.subMeshes[0].verticesCount;
 
         // number of faces is logically the size of the array divided by 3 (A, B, C)
@@ -36,7 +38,16 @@ export function createMeshesFromJSON(jsonObject: any): Mesh[] {
             const x = verticesArray[index * 3];
             const y = verticesArray[index * 3 + 1];
             const z = verticesArray[index * 3 + 2];
-            mesh.vertices[index] = new BABYLON.Vector3(x, y, z);
+
+            const nx = normals[index * 3];
+            const ny = normals[index * 3 + 1];
+            const nz = normals[index * 3 + 2];
+
+            mesh.vertices[index] = {
+                coordinates: new BABYLON.Vector3(x, y, z),
+                normal: new BABYLON.Vector3(nx, ny, nz),
+                worldCoordinates: null,
+            };
         }
 
         // then filling the faces array 根据面的点索引数据，每次取三个 放到mesh的面数据中去
