@@ -71,13 +71,21 @@ function loadJSONCompleted(meshesLoaded: Mesh[]) {
     requestAnimationFrame(drawingLoop);
 }
 
+let previousDate: number = 0;
 function drawingLoop() {
+    // fps
+    const now = Date.now();
+    const currentFps = 1000.0 / (now - previousDate);
+    previousDate = now;
+
+    console.log(`${currentFps.toPrecision(2)} fps`);
+
     device.clear();
 
     // rotating slightly the cube during each frame rendered
     meshes.forEach((mesh) => {
-        mesh.rotation.y = Math.PI;
-        // mesh.rotation.y += 0.01;
+        // mesh.rotation.x += 0.01;
+        mesh.rotation.y += 0.01;
     });
 
     // Doing the various matrix operations

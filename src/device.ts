@@ -1,5 +1,5 @@
 import { Camera } from "./camera";
-import { Mesh } from "./mesh";
+import { Mesh, ScanLineData, Vertex } from "./mesh";
 
 export class Device {
     private backbuffer?: ImageData;
@@ -57,17 +57,24 @@ export class Device {
      * Project takes some 3D coordinates and transform them
      * in 2D coordinates using the transformation matrix
      */
-    public project(coord: BABYLON.Vector3, transMat: BABYLON.Matrix): BABYLON.Vector3 {
+    public project(vertex: Vertex, transMat: BABYLON.Matrix, world: BABYLON.Matrix): Vertex {
         // transforming the coordinates
-        const point = BABYLON.Vector3.TransformCoordinates(coord, transMat);
+        const point2d = BABYLON.Vector3.TransformCoordinates(vertex.coordinates, transMat);
+        const point3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.coordinates, world);
+        const normal3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.normal, world);
 
         // The transformed coordinates will be based on coordinate system
         // starting on the center of the screen. But drawing on screen normally starts
         // from top left. We then need to transform them again to have x:0, y:0 on top left
-        const x = (point.x * this.workingWidth + this.workingWidth / 2.0) >> 0;
-        const y = (-point.y * this.workingHeight + this.workingHeight / 2.0) >> 0;
+        const x = (point2d.x * this.workingWidth + this.workingWidth / 2.0) >> 0;
+        const y = (-point2d.y * this.workingHeight + this.workingHeight / 2.0) >> 0;
 
-        return new BABYLON.Vector3(x, y, point.z);
+        // return new BABYLON.Vector3(x, y, point.z);
+        return {
+            coordinates: new BABYLON.Vector3(x, y, point2d.z),
+            normal: normal3dWorld,
+            worldCoordinates: point3dWorld,
+        };
     }
 
     /**
@@ -117,18 +124,22 @@ export class Device {
      * @param color
      */
     public processScanLine(
-        y: number,
-        pa: BABYLON.Vector3,
-        pb: BABYLON.Vector3,
-        pc: BABYLON.Vector3,
-        pd: BABYLON.Vector3,
+        data: ScanLineData,
+        va: Vertex,
+        vb: Vertex,
+        vc: Vertex,
+        vd: Vertex,
         color: BABYLON.Color4,
     ): void {
+        const pa = va.coordinates;
+        const pb = vb.coordinates;
+        const pc = vc.coordinates;
+        const pd = vd.coordinates;
         // thanks to current Y, we can compute the gradient to compute others values like
         // the starting X(sx) and ending X (es) to draw between
         // if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
-        const gradient1 = pa.y != pb.y ? (y - pa.y) / (pb.y - pa.y) : 1;
-        const gradient2 = pa.y != pb.y ? (y - pc.y) / (pd.y - pc.y) : 1;
+        const gradient1 = pa.y != pb.y ? (data.currentY - pa.y) / (pb.y - pa.y) : 1;
+        const gradient2 = pa.y != pb.y ? (data.currentY - pc.y) / (pd.y - pc.y) : 1;
         const sx = this.interpolate(pa.x, pb.x, gradient1) >> 0;
         const ex = this.interpolate(pc.x, pd.x, gradient2) >> 0;
 
@@ -143,32 +154,74 @@ export class Device {
 
             const z = this.interpolate(z1, z2, gradient);
 
-            this.drawPoint(new BABYLON.Vector3(x, y, z), color);
+            // 光源向量和面的法向量的夹角cos值
+            const ndotl = data.ndotla;
+
+            // changing the color value using the cosine of the angle
+            // between the light vector and the normal vector
+            this.drawPoint(
+                new BABYLON.Vector3(x, data.currentY, z),
+                new BABYLON.Color4(color.r * ndotl, color.g * ndotl, color.b * ndotl, 1),
+                // color,
+            );
         }
     }
 
-    public drawTriangle(p1: BABYLON.Vector3, p2: BABYLON.Vector3, p3: BABYLON.Vector3, color: BABYLON.Color4): void {
+    /**
+     * 计算 光源向量（灯源坐标 - 顶点坐标）和法向量的夹角的cos值，返回值0 到 1
+     *
+     * normal vector • light vector
+     * @param vertex
+     * @param normal
+     * @param lightPosition
+     */
+    public computeNDotL(vertex: BABYLON.Vector3, normal: BABYLON.Vector3, lightPosition: BABYLON.Vector3): number {
+        const lightDirection = lightPosition.subtract(vertex);
+        normal.normalize();
+        lightDirection.normalize();
+
+        return Math.max(0, BABYLON.Vector3.Dot(normal, lightDirection));
+    }
+
+    public drawTriangle(v1: Vertex, v2: Vertex, v3: Vertex, color: BABYLON.Color4): void {
         // Sorting the points in order to always have this order on screen p1, p2 & p3
         // with p1 always up (thus having the Y the lowest possible to be near the top screen)
         // then p2 between p1 & p3 (according to Y-axis up to down )
-        if (p1.y > p2.y) {
-            const temp = p2;
-            p2 = p1;
-            p1 = temp;
+        if (v1.coordinates.y > v2.coordinates.y) {
+            const temp = v1;
+            v2 = v1;
+            v1 = temp;
         }
 
-        if (p2.y > p3.y) {
-            const temp = p2;
-            p2 = p3;
-            p3 = temp;
+        if (v2.coordinates.y > v3.coordinates.y) {
+            const temp = v2;
+            v2 = v3;
+            v3 = temp;
         }
 
-        if (p1.y > p2.y) {
-            const temp = p2;
-            p2 = p1;
-            p1 = temp;
+        if (v1.coordinates.y > v2.coordinates.y) {
+            const temp = v2;
+            v2 = v1;
+            v1 = temp;
         }
         // sort end
+
+        const p1 = v1.coordinates;
+        const p2 = v2.coordinates;
+        const p3 = v3.coordinates;
+
+        // normal face's vector is the average normal between each vertex's normal
+        // computing also the center point of the face
+        // 面的法向量
+        const vnFace = v1.normal.add(v2.normal.add(v3.normal)).scale(1 / 3);
+        // 面的中心点
+        const centerPoint = v1.worldCoordinates.add(v2.worldCoordinates.add(v3.worldCoordinates)).scale(1 / 3);
+        // light position
+        const lightPos = new BABYLON.Vector3(0, 10, 10);
+        // 计算光源向量和面的法向量的夹角cos值
+        const ndotl = this.computeNDotL(centerPoint, vnFace, lightPos);
+
+        const data: ScanLineData = { ndotla: ndotl };
 
         // inverse slopes
         let dP1P2: number;
@@ -203,23 +256,25 @@ export class Device {
         // p2 on right
         if (dP1P2 > dP1P3) {
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
+                data.currentY = y;
                 if (y < p2.y) {
                     // scan p1p3 p1p2
-                    this.processScanLine(y, p1, p3, p1, p2, color);
+                    this.processScanLine(data, v1, v3, v1, v2, color);
                 } else {
                     // scan p1p3 p2p3
-                    this.processScanLine(y, p1, p3, p2, p3, color);
+                    this.processScanLine(data, v1, v3, v2, v3, color);
                 }
             }
         } else {
             // p2 on left
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
+                data.currentY = y;
                 if (y < p2.y) {
                     // scan p1p2 p1p3
-                    this.processScanLine(y, p1, p2, p1, p3, color);
+                    this.processScanLine(data, v1, v2, v1, v3, color);
                 } else {
                     // scan p2p3 p1p3
-                    this.processScanLine(y, p2, p3, p1, p3, color);
+                    this.processScanLine(data, v2, v3, v1, v3, color);
                 }
             }
         }
@@ -311,9 +366,9 @@ export class Device {
                 const vertexB = cMesh.vertices[currentFace.B];
                 const vertexC = cMesh.vertices[currentFace.C];
 
-                const pixelA = this.project(vertexA, transformMatrix);
-                const pixelB = this.project(vertexB, transformMatrix);
-                const pixelC = this.project(vertexC, transformMatrix);
+                const pixelA = this.project(vertexA, transformMatrix, worldMatrix);
+                const pixelB = this.project(vertexB, transformMatrix, worldMatrix);
+                const pixelC = this.project(vertexC, transformMatrix, worldMatrix);
 
                 // this.drawLine(pixelA, pixelB);
                 // this.drawLine(pixelB, pixelC);
@@ -322,8 +377,8 @@ export class Device {
                 // this.drawBline(pixelB, pixelC);
                 // this.drawBline(pixelC, pixelA);
 
-                const color: number = 0.25 + ((i % cMesh.faces.length) / cMesh.faces.length) * 0.75;
-
+                // const color: number = 0.25 + ((i % cMesh.faces.length) / cMesh.faces.length) * 0.75;
+                const color = 1.0;
                 /** draw triangle */
                 this.drawTriangle(pixelA, pixelB, pixelC, new BABYLON.Color4(color, color, color, 1));
 
