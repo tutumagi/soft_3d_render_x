@@ -1,4 +1,5 @@
-import { Mesh } from "./mesh";
+import { Material, Mesh } from "./mesh";
+import { Texture } from "./texture";
 
 export function loadJSONFileAsync(fileName: string, callback: (result: Mesh[]) => void): void {
     let jsonObject = {};
@@ -20,21 +21,36 @@ export function loadJSONFileAsync(fileName: string, callback: (result: Mesh[]) =
  *  json 格式
  */
 export function createMeshesFromJSON(jsonObject: any): Mesh[] {
-    return jsonObject.meshes.map((meshObject) => {
+    const materials: { [id: string]: Material } = {};
+
+    jsonObject.materials.forEach((material) => {
+        materials[material.id] = {
+            ID: material.id,
+            name: material.name,
+            diffuseTextureName: material.diffuseTexture.name,
+        };
+    });
+
+    const meshes: Mesh[] = jsonObject.meshes.map((meshObject) => {
         const verticesArray: number[] = meshObject.positions;
+        if (!verticesArray) {
+            return;
+        }
         // Faces
         const indicesArray: number[] = meshObject.indices;
 
         const normals: number[] = meshObject.normals;
 
-        const verticesCount = meshObject.subMeshes[0].verticesCount;
+        const verticesCount = verticesArray.length;
+
+        const uvs: number[] = meshObject.uvs;
 
         // number of faces is logically the size of the array divided by 3 (A, B, C)
         const facesCount = indicesArray.length / 3;
         const mesh = new Mesh(meshObject.name, verticesCount, facesCount);
 
         // Filling the vertices array of our mesh first，根据position 每次取三个放到顶点数据
-        for (let index = 0; index < verticesCount; ++index) {
+        for (let index = 0; index < verticesCount / 3; ++index) {
             const x = verticesArray[index * 3];
             const y = verticesArray[index * 3 + 1];
             const z = verticesArray[index * 3 + 2];
@@ -47,6 +63,7 @@ export function createMeshesFromJSON(jsonObject: any): Mesh[] {
                 coordinates: new BABYLON.Vector3(x, y, z),
                 normal: new BABYLON.Vector3(nx, ny, nz),
                 worldCoordinates: null,
+                TextureCoordinates: new BABYLON.Vector2(uvs[index * 2], uvs[index * 2 + 1]),
             };
         }
 
@@ -67,7 +84,12 @@ export function createMeshesFromJSON(jsonObject: any): Mesh[] {
         const position = meshObject.position;
         mesh.postion = new BABYLON.Vector3(position[0], position[1], position[2]);
 
+        if (uvs && uvs.length > 0) {
+            const materialID = meshObject.materialId;
+            mesh.texture = new Texture(materials[materialID].diffuseTextureName, 2048, 2048);
+        }
+
         return mesh;
     });
-    return [];
+    return meshes;
 }

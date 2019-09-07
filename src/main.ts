@@ -56,13 +56,17 @@ function init() {
     camera = new Camera();
     device = new Device(canvas);
 
-    camera.position = new BABYLON.Vector3(0, 0, 10);
-    camera.target = new BABYLON.Vector3(0, 0, 0);
+    // camera.position = new BABYLON.Vector3(0, 0, 10);
+    // camera.target = new BABYLON.Vector3(0, 0, 0);
+
+    camera.position = new BABYLON.Vector3(32, 95, 45);
+    camera.target = new BABYLON.Vector3(-0.13, 31, 8);
 
     // Calling the HTML5 rendering loop
     // requestAnimationFrame(drawingLoop);
 
-    loadJSONFileAsync("./dist/res/test_monkey.babylon", loadJSONCompleted);
+    // loadJSONFileAsync("./dist/res/test_monkey.babylon", loadJSONCompleted);
+    loadJSONFileAsync("./dist/res/rabbit.babylon", loadJSONCompleted);
 }
 
 function loadJSONCompleted(meshesLoaded: Mesh[]) {
@@ -78,7 +82,7 @@ function drawingLoop() {
     const currentFps = 1000.0 / (now - previousDate);
     previousDate = now;
 
-    console.log(`${currentFps.toPrecision(2)} fps`);
+    // console.log(`${currentFps.toPrecision(2)} fps`);
 
     device.clear();
 
