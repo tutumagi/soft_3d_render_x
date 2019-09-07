@@ -61,6 +61,8 @@ export class Device {
     public project(vertex: Vertex, transMat: BABYLON.Matrix, world: BABYLON.Matrix): Vertex {
         // transforming the coordinates
         const point2d = BABYLON.Vector3.TransformCoordinates(vertex.coordinates, transMat);
+
+        // 将坐标和法向量转换到 3d空间的 向量
         const point3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.coordinates, world);
         const normal3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.normal, world);
 
@@ -142,7 +144,7 @@ export class Device {
         // the starting X(sx) and ending X (es) to draw between
         // if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
         const gradient1 = pa.y != pb.y ? (data.currentY - pa.y) / (pb.y - pa.y) : 1;
-        const gradient2 = pa.y != pb.y ? (data.currentY - pc.y) / (pd.y - pc.y) : 1;
+        const gradient2 = pc.y != pd.y ? (data.currentY - pc.y) / (pd.y - pc.y) : 1;
 
         const sx = this.interpolate(pa.x, pb.x, gradient1) >> 0;
         const ex = this.interpolate(pc.x, pd.x, gradient2) >> 0;
@@ -197,7 +199,7 @@ export class Device {
     }
 
     /**
-     * 计算 光源向量（灯源坐标 - 顶点坐标）和法向量的夹角的cos值，返回值0 到 1
+     * 计算 光源向量(light)（灯源坐标 - 顶点坐标）和法向量（normal）的夹角的cos值，返回值0 到 1
      *
      * normal vector • light vector
      * @param vertex
@@ -217,7 +219,7 @@ export class Device {
         // with p1 always up (thus having the Y the lowest possible to be near the top screen)
         // then p2 between p1 & p3 (according to Y-axis up to down )
         if (v1.coordinates.y > v2.coordinates.y) {
-            const temp = v1;
+            const temp = v2;
             v2 = v1;
             v1 = temp;
         }
@@ -352,7 +354,7 @@ export class Device {
                     data.ndotla = nl2;
                     data.ndotlb = nl3;
                     data.ndotlc = nl1;
-                    data.ndotld = nl2;
+                    data.ndotld = nl3;
 
                     data.ua = v2.TextureCoordinates.x;
                     data.ub = v3.TextureCoordinates.x;
@@ -370,56 +372,6 @@ export class Device {
             }
         }
     }
-
-    /** 绘制线条 是一个 递归绘制起始点 - 中间点 - 结束点（总共 3 pixel）的过程 */
-    // public drawLine(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
-    //     const dist = point1.subtract(point0).length();
-
-    //     if (dist < 2) {
-    //         return;
-    //     }
-
-    //     const middlePoint = point0.add(point1.subtract(point0).scale(0.5));
-
-    //     this.drawPoint(middlePoint, new BABYLON.Color4(1, 1, 0, 1));
-
-    //     this.drawLine(point0, middlePoint);
-    //     this.drawLine(middlePoint, point1);
-    // }
-
-    /**
-     * [Bresenham's_line_algorithm](https://en.wikipedia.org/wiki/Bresenham's_line_algorithm)
-     * 更平滑的绘制线条的算法
-     */
-    // public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2, color: BABYLON.Color4): void {
-    //     let x0 = point0.x >> 0;
-    //     let y0 = point0.y >> 0;
-    //     const x1 = point1.x >> 0;
-    //     const y1 = point1.y >> 0;
-    //     const dx = Math.abs(x1 - x0);
-    //     const dy = Math.abs(y1 - y0);
-
-    //     const sx = x0 < x1 ? 1 : -1;
-    //     const sy = y0 < y1 ? 1 : -1;
-
-    //     let err = dx - dy;
-
-    //     while (true) {
-    //         this.drawPoint(new BABYLON.Vector2(x0, y0), color);
-    //         if (x0 == x1 && y0 == y1) {
-    //             break;
-    //         }
-    //         const e2 = 2 * err;
-    //         if (e2 > -dy) {
-    //             err -= dy;
-    //             x0 += sx;
-    //         }
-    //         if (e2 < dx) {
-    //             err += dx;
-    //             y0 += sy;
-    //         }
-    //     }
-    // }
 
     public render(camera: Camera, meshes: Mesh[]) {
         const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, BABYLON.Vector3.Up());
@@ -477,4 +429,54 @@ export class Device {
             }
         }
     }
+
+    /** 绘制线条 是一个 递归绘制起始点 - 中间点 - 结束点（总共 3 pixel）的过程 */
+    // public drawLine(point0: BABYLON.Vector2, point1: BABYLON.Vector2): void {
+    //     const dist = point1.subtract(point0).length();
+
+    //     if (dist < 2) {
+    //         return;
+    //     }
+
+    //     const middlePoint = point0.add(point1.subtract(point0).scale(0.5));
+
+    //     this.drawPoint(middlePoint, new BABYLON.Color4(1, 1, 0, 1));
+
+    //     this.drawLine(point0, middlePoint);
+    //     this.drawLine(middlePoint, point1);
+    // }
+
+    /**
+     * [Bresenham's_line_algorithm](https://en.wikipedia.org/wiki/Bresenham's_line_algorithm)
+     * 更平滑的绘制线条的算法
+     */
+    // public drawBline(point0: BABYLON.Vector2, point1: BABYLON.Vector2, color: BABYLON.Color4): void {
+    //     let x0 = point0.x >> 0;
+    //     let y0 = point0.y >> 0;
+    //     const x1 = point1.x >> 0;
+    //     const y1 = point1.y >> 0;
+    //     const dx = Math.abs(x1 - x0);
+    //     const dy = Math.abs(y1 - y0);
+
+    //     const sx = x0 < x1 ? 1 : -1;
+    //     const sy = y0 < y1 ? 1 : -1;
+
+    //     let err = dx - dy;
+
+    //     while (true) {
+    //         this.drawPoint(new BABYLON.Vector2(x0, y0), color);
+    //         if (x0 == x1 && y0 == y1) {
+    //             break;
+    //         }
+    //         const e2 = 2 * err;
+    //         if (e2 > -dy) {
+    //             err -= dy;
+    //             x0 += sx;
+    //         }
+    //         if (e2 < dx) {
+    //             err += dx;
+    //             y0 += sy;
+    //         }
+    //     }
+    // }
 }
