@@ -86,7 +86,9 @@ export function createMeshesFromJSON(jsonObject: any): Mesh[] {
 
         if (uvs && uvs.length > 0) {
             const materialID = meshObject.materialId;
-            mesh.texture = new Texture(materials[materialID].diffuseTextureName, 2048, 2048);
+            if (materials[materialID]) {
+                mesh.texture = new Texture(materials[materialID].diffuseTextureName, 2048, 2048);
+            }
         }
 
         return mesh;
