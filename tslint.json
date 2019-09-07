@@ -10,7 +10,8 @@
         "no-bitwise": false,
         "no-reference": false,
         "interface-name": false,
-        "triple-equals": false
+        "triple-equals": false,
+        "object-literal-sort-keys": false
     },
     "rulesDirectory": []
 }

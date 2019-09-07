@@ -1,5 +1,6 @@
 import { Camera } from "./camera";
 import { Mesh, ScanLineData, Vertex } from "./mesh";
+import { Texture } from "./texture";
 
 export class Device {
     private backbuffer?: ImageData;
@@ -74,6 +75,7 @@ export class Device {
             coordinates: new BABYLON.Vector3(x, y, point2d.z),
             normal: normal3dWorld,
             worldCoordinates: point3dWorld,
+            TextureCoordinates: vertex.TextureCoordinates,
         };
     }
 
@@ -130,6 +132,7 @@ export class Device {
         vc: Vertex,
         vd: Vertex,
         color: BABYLON.Color4,
+        texture?: Texture,
     ): void {
         const pa = va.coordinates;
         const pb = vb.coordinates;
@@ -140,12 +143,23 @@ export class Device {
         // if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
         const gradient1 = pa.y != pb.y ? (data.currentY - pa.y) / (pb.y - pa.y) : 1;
         const gradient2 = pa.y != pb.y ? (data.currentY - pc.y) / (pd.y - pc.y) : 1;
+
         const sx = this.interpolate(pa.x, pb.x, gradient1) >> 0;
         const ex = this.interpolate(pc.x, pd.x, gradient2) >> 0;
 
         // starting Z &  ending Z
         const z1: number = this.interpolate(pa.z, pb.z, gradient1);
         const z2: number = this.interpolate(pc.z, pd.z, gradient2);
+
+        // interpolating normals on Y
+        const snl = this.interpolate(data.ndotla, data.ndotlb, gradient1);
+        const enl = this.interpolate(data.ndotlc, data.ndotld, gradient2);
+
+        // interpolating texture coordinates on Y
+        const su = this.interpolate(data.ua, data.ub, gradient1);
+        const eu = this.interpolate(data.uc, data.ud, gradient2);
+        const sv = this.interpolate(data.va, data.vb, gradient1);
+        const ev = this.interpolate(data.vc, data.vd, gradient2);
 
         // drawing a line from left (sx) to right (ex)
         for (let x = sx; x < ex; x++) {
@@ -154,14 +168,29 @@ export class Device {
 
             const z = this.interpolate(z1, z2, gradient);
 
-            // 光源向量和面的法向量的夹角cos值
-            const ndotl = data.ndotla;
+            const ndotl = this.interpolate(snl, enl, gradient);
+            const u = this.interpolate(su, eu, gradient);
+            const v = this.interpolate(sv, ev, gradient);
 
+            // 光源向量和面的法向量的夹角cos值
+            // const ndotl = data.ndotla;
+
+            let textureColor;
+            if (texture) {
+                textureColor = texture.map(u, v);
+            } else {
+                textureColor = new BABYLON.Color4(1, 1, 1, 1);
+            }
             // changing the color value using the cosine of the angle
             // between the light vector and the normal vector
             this.drawPoint(
                 new BABYLON.Vector3(x, data.currentY, z),
-                new BABYLON.Color4(color.r * ndotl, color.g * ndotl, color.b * ndotl, 1),
+                new BABYLON.Color4(
+                    color.r * ndotl * textureColor.r,
+                    color.g * ndotl * textureColor.g,
+                    color.b * ndotl * textureColor.b,
+                    1,
+                ),
                 // color,
             );
         }
@@ -183,7 +212,7 @@ export class Device {
         return Math.max(0, BABYLON.Vector3.Dot(normal, lightDirection));
     }
 
-    public drawTriangle(v1: Vertex, v2: Vertex, v3: Vertex, color: BABYLON.Color4): void {
+    public drawTriangle(v1: Vertex, v2: Vertex, v3: Vertex, color: BABYLON.Color4, texture?: Texture): void {
         // Sorting the points in order to always have this order on screen p1, p2 & p3
         // with p1 always up (thus having the Y the lowest possible to be near the top screen)
         // then p2 between p1 & p3 (according to Y-axis up to down )
@@ -212,16 +241,19 @@ export class Device {
 
         // normal face's vector is the average normal between each vertex's normal
         // computing also the center point of the face
-        // 面的法向量
-        const vnFace = v1.normal.add(v2.normal.add(v3.normal)).scale(1 / 3);
-        // 面的中心点
-        const centerPoint = v1.worldCoordinates.add(v2.worldCoordinates.add(v3.worldCoordinates)).scale(1 / 3);
+        // // 面的法向量
+        // const vnFace = v1.normal.add(v2.normal.add(v3.normal)).scale(1 / 3);
+        // // 面的中心点
+        // const centerPoint = v1.worldCoordinates.add(v2.worldCoordinates.add(v3.worldCoordinates)).scale(1 / 3);
         // light position
         const lightPos = new BABYLON.Vector3(0, 10, 10);
         // 计算光源向量和面的法向量的夹角cos值
-        const ndotl = this.computeNDotL(centerPoint, vnFace, lightPos);
+        // const ndotl = this.computeNDotL(centerPoint, vnFace, lightPos);
+        const nl1 = this.computeNDotL(v1.worldCoordinates, v1.normal, lightPos);
+        const nl2 = this.computeNDotL(v2.worldCoordinates, v2.normal, lightPos);
+        const nl3 = this.computeNDotL(v3.worldCoordinates, v3.normal, lightPos);
 
-        const data: ScanLineData = { ndotla: ndotl };
+        const data: ScanLineData = {};
 
         // inverse slopes
         let dP1P2: number;
@@ -258,11 +290,40 @@ export class Device {
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
                 data.currentY = y;
                 if (y < p2.y) {
+                    data.ndotla = nl1;
+                    data.ndotlb = nl3;
+                    data.ndotlc = nl1;
+                    data.ndotld = nl2;
+
+                    data.ua = v1.TextureCoordinates.x;
+                    data.ub = v3.TextureCoordinates.x;
+                    data.uc = v1.TextureCoordinates.x;
+                    data.ud = v2.TextureCoordinates.x;
+
+                    data.va = v1.TextureCoordinates.y;
+                    data.vb = v3.TextureCoordinates.y;
+                    data.vc = v1.TextureCoordinates.y;
+                    data.vd = v2.TextureCoordinates.y;
+
                     // scan p1p3 p1p2
-                    this.processScanLine(data, v1, v3, v1, v2, color);
+                    this.processScanLine(data, v1, v3, v1, v2, color, texture);
                 } else {
+                    data.ndotla = nl1;
+                    data.ndotlb = nl3;
+                    data.ndotlc = nl2;
+                    data.ndotld = nl3;
+
+                    data.ua = v1.TextureCoordinates.x;
+                    data.ub = v3.TextureCoordinates.x;
+                    data.uc = v2.TextureCoordinates.x;
+                    data.ud = v3.TextureCoordinates.x;
+
+                    data.va = v1.TextureCoordinates.y;
+                    data.vb = v3.TextureCoordinates.y;
+                    data.vc = v2.TextureCoordinates.y;
+                    data.vd = v3.TextureCoordinates.y;
                     // scan p1p3 p2p3
-                    this.processScanLine(data, v1, v3, v2, v3, color);
+                    this.processScanLine(data, v1, v3, v2, v3, color, texture);
                 }
             }
         } else {
@@ -270,11 +331,41 @@ export class Device {
             for (let y = p1.y >> 0; y <= p3.y >> 0; y++) {
                 data.currentY = y;
                 if (y < p2.y) {
+                    data.ndotla = nl1;
+                    data.ndotlb = nl2;
+                    data.ndotlc = nl1;
+                    data.ndotld = nl3;
+
+                    data.ua = v1.TextureCoordinates.x;
+                    data.ub = v2.TextureCoordinates.x;
+                    data.uc = v1.TextureCoordinates.x;
+                    data.ud = v3.TextureCoordinates.x;
+
+                    data.va = v1.TextureCoordinates.y;
+                    data.vb = v2.TextureCoordinates.y;
+                    data.vc = v1.TextureCoordinates.y;
+                    data.vd = v3.TextureCoordinates.y;
+
                     // scan p1p2 p1p3
-                    this.processScanLine(data, v1, v2, v1, v3, color);
+                    this.processScanLine(data, v1, v2, v1, v3, color, texture);
                 } else {
+                    data.ndotla = nl2;
+                    data.ndotlb = nl3;
+                    data.ndotlc = nl1;
+                    data.ndotld = nl2;
+
+                    data.ua = v2.TextureCoordinates.x;
+                    data.ub = v3.TextureCoordinates.x;
+                    data.uc = v1.TextureCoordinates.x;
+                    data.ud = v3.TextureCoordinates.x;
+
+                    data.va = v2.TextureCoordinates.y;
+                    data.vb = v3.TextureCoordinates.y;
+                    data.vc = v1.TextureCoordinates.y;
+                    data.vd = v3.TextureCoordinates.y;
+
                     // scan p2p3 p1p3
-                    this.processScanLine(data, v2, v3, v1, v3, color);
+                    this.processScanLine(data, v2, v3, v1, v3, color, texture);
                 }
             }
         }
@@ -380,7 +471,7 @@ export class Device {
                 // const color: number = 0.25 + ((i % cMesh.faces.length) / cMesh.faces.length) * 0.75;
                 const color = 1.0;
                 /** draw triangle */
-                this.drawTriangle(pixelA, pixelB, pixelC, new BABYLON.Color4(color, color, color, 1));
+                this.drawTriangle(pixelA, pixelB, pixelC, new BABYLON.Color4(color, color, color, 1), cMesh.texture);
 
                 // console.log(`draw ${vertexA.toString()} ${vertexB.toString()} ${vertexC.toString()}`);
             }
