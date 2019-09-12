@@ -18,9 +18,9 @@
             "minZ": 0.1,
             "name": "Default camera",
             "position": [
-                32.5124359,
-                95.4732361,
-                45.12835
+                0,
+                0,
+                0
             ],
             "rotation": [
                 0,
