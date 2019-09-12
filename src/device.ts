@@ -2,6 +2,13 @@ import { Camera } from "./camera";
 import { Mesh, ScanLineData, Vertex } from "./mesh";
 import { Texture } from "./texture";
 
+export enum eRenderType {
+    Vertice,
+    Line,
+    Face,
+    UVMap,
+}
+
 export class Device {
     private backbuffer?: ImageData;
     private workingCanvas: HTMLCanvasElement;
@@ -29,7 +36,7 @@ export class Device {
 
         for (let i = 0; i < this.depthbuffer.length; ++i) {
             // 填一个大一点的数字
-            this.depthbuffer[i] = 1000000;
+            this.depthbuffer[i] = 10000000;
         }
     }
 
@@ -64,8 +71,10 @@ export class Device {
 
         // 将坐标和法向量转换到 3d空间的 向量
         const point3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.coordinates, world);
-        const normal3dWorld = BABYLON.Vector3.TransformCoordinates(vertex.normal, world);
+        const normal3dWorld: BABYLON.Vector3 = BABYLON.Vector3.TransformCoordinates(vertex.normal, world);
 
+        // 原始的point2d 是在 NDC space的，一个立方体，原点在中心，左下角为 (-1，-1)，右上角为(1，1)
+        // 转换到屏幕坐标尺寸
         // The transformed coordinates will be based on coordinate system
         // starting on the center of the screen. But drawing on screen normally starts
         // from top left. We then need to transform them again to have x:0, y:0 on top left
@@ -143,8 +152,8 @@ export class Device {
         // thanks to current Y, we can compute the gradient to compute others values like
         // the starting X(sx) and ending X (es) to draw between
         // if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
-        const gradient1 = pa.y != pb.y ? (data.currentY - pa.y) / (pb.y - pa.y) : 1;
-        const gradient2 = pc.y != pd.y ? (data.currentY - pc.y) / (pd.y - pc.y) : 1;
+        const gradient1 = pa.y != pb.y ? (data.currentY! - pa.y) / (pb.y - pa.y) : 1;
+        const gradient2 = pc.y != pd.y ? (data.currentY! - pc.y) / (pd.y - pc.y) : 1;
 
         const sx = this.interpolate(pa.x, pb.x, gradient1) >> 0;
         const ex = this.interpolate(pc.x, pd.x, gradient2) >> 0;
@@ -157,11 +166,17 @@ export class Device {
         const snl = this.interpolate(data.ndotla, data.ndotlb, gradient1);
         const enl = this.interpolate(data.ndotlc, data.ndotld, gradient2);
 
+        let su: number | undefined;
+        let eu: number | undefined;
+        let sv: number | undefined;
+        let ev: number | undefined;
         // interpolating texture coordinates on Y
-        const su = this.interpolate(data.ua, data.ub, gradient1);
-        const eu = this.interpolate(data.uc, data.ud, gradient2);
-        const sv = this.interpolate(data.va, data.vb, gradient1);
-        const ev = this.interpolate(data.vc, data.vd, gradient2);
+        if (data.ua && data.ub && data.uc && data.ud && data.va && data.vb && data.vc && data.vd) {
+            su = this.interpolate(data.ua, data.ub, gradient1);
+            eu = this.interpolate(data.uc, data.ud, gradient2);
+            sv = this.interpolate(data.va, data.vb, gradient1);
+            ev = this.interpolate(data.vc, data.vd, gradient2);
+        }
 
         // drawing a line from left (sx) to right (ex)
         for (let x = sx; x < ex; x++) {
@@ -171,14 +186,14 @@ export class Device {
             const z = this.interpolate(z1, z2, gradient);
 
             const ndotl = this.interpolate(snl, enl, gradient);
-            const u = this.interpolate(su, eu, gradient);
-            const v = this.interpolate(sv, ev, gradient);
 
             // 光源向量和面的法向量的夹角cos值
             // const ndotl = data.ndotla;
 
             let textureColor;
-            if (texture) {
+            if (texture && su && sv && eu && ev) {
+                const u = this.interpolate(su, eu, gradient);
+                const v = this.interpolate(sv, ev, gradient);
                 textureColor = texture.map(u, v);
             } else {
                 textureColor = new BABYLON.Color4(1, 1, 1, 1);
@@ -186,7 +201,7 @@ export class Device {
             // changing the color value using the cosine of the angle
             // between the light vector and the normal vector
             this.drawPoint(
-                new BABYLON.Vector3(x, data.currentY, z),
+                new BABYLON.Vector3(x, data.currentY!, z),
                 new BABYLON.Color4(
                     color.r * ndotl * textureColor.r,
                     color.g * ndotl * textureColor.g,
@@ -251,10 +266,11 @@ export class Device {
         const lightPos = new BABYLON.Vector3(0, 10, 10);
         // 计算光源向量和面的法向量的夹角cos值
         // const ndotl = this.computeNDotL(centerPoint, vnFace, lightPos);
-        const nl1 = this.computeNDotL(v1.worldCoordinates, v1.normal, lightPos);
-        const nl2 = this.computeNDotL(v2.worldCoordinates, v2.normal, lightPos);
-        const nl3 = this.computeNDotL(v3.worldCoordinates, v3.normal, lightPos);
 
+        const nl1 = this.computeNDotL(v1.worldCoordinates!, v1.normal, lightPos);
+        const nl2 = this.computeNDotL(v2.worldCoordinates!, v2.normal, lightPos);
+        const nl3 = this.computeNDotL(v3.worldCoordinates!, v3.normal, lightPos);
+        // @ts-ignore
         const data: ScanLineData = {};
 
         // inverse slopes
@@ -297,15 +313,17 @@ export class Device {
                     data.ndotlc = nl1;
                     data.ndotld = nl2;
 
-                    data.ua = v1.TextureCoordinates.x;
-                    data.ub = v3.TextureCoordinates.x;
-                    data.uc = v1.TextureCoordinates.x;
-                    data.ud = v2.TextureCoordinates.x;
+                    if (v1.TextureCoordinates && v2.TextureCoordinates && v3.TextureCoordinates) {
+                        data.ua = v1.TextureCoordinates.x;
+                        data.ub = v3.TextureCoordinates.x;
+                        data.uc = v1.TextureCoordinates.x;
+                        data.ud = v2.TextureCoordinates.x;
 
-                    data.va = v1.TextureCoordinates.y;
-                    data.vb = v3.TextureCoordinates.y;
-                    data.vc = v1.TextureCoordinates.y;
-                    data.vd = v2.TextureCoordinates.y;
+                        data.va = v1.TextureCoordinates.y;
+                        data.vb = v3.TextureCoordinates.y;
+                        data.vc = v1.TextureCoordinates.y;
+                        data.vd = v2.TextureCoordinates.y;
+                    }
 
                     // scan p1p3 p1p2
                     this.processScanLine(data, v1, v3, v1, v2, color, texture);
@@ -314,16 +332,17 @@ export class Device {
                     data.ndotlb = nl3;
                     data.ndotlc = nl2;
                     data.ndotld = nl3;
+                    if (v1.TextureCoordinates && v2.TextureCoordinates && v3.TextureCoordinates) {
+                        data.ua = v1.TextureCoordinates.x;
+                        data.ub = v3.TextureCoordinates.x;
+                        data.uc = v2.TextureCoordinates.x;
+                        data.ud = v3.TextureCoordinates.x;
 
-                    data.ua = v1.TextureCoordinates.x;
-                    data.ub = v3.TextureCoordinates.x;
-                    data.uc = v2.TextureCoordinates.x;
-                    data.ud = v3.TextureCoordinates.x;
-
-                    data.va = v1.TextureCoordinates.y;
-                    data.vb = v3.TextureCoordinates.y;
-                    data.vc = v2.TextureCoordinates.y;
-                    data.vd = v3.TextureCoordinates.y;
+                        data.va = v1.TextureCoordinates.y;
+                        data.vb = v3.TextureCoordinates.y;
+                        data.vc = v2.TextureCoordinates.y;
+                        data.vd = v3.TextureCoordinates.y;
+                    }
                     // scan p1p3 p2p3
                     this.processScanLine(data, v1, v3, v2, v3, color, texture);
                 }
@@ -337,16 +356,17 @@ export class Device {
                     data.ndotlb = nl2;
                     data.ndotlc = nl1;
                     data.ndotld = nl3;
+                    if (v1.TextureCoordinates && v2.TextureCoordinates && v3.TextureCoordinates) {
+                        data.ua = v1.TextureCoordinates.x;
+                        data.ub = v2.TextureCoordinates.x;
+                        data.uc = v1.TextureCoordinates.x;
+                        data.ud = v3.TextureCoordinates.x;
 
-                    data.ua = v1.TextureCoordinates.x;
-                    data.ub = v2.TextureCoordinates.x;
-                    data.uc = v1.TextureCoordinates.x;
-                    data.ud = v3.TextureCoordinates.x;
-
-                    data.va = v1.TextureCoordinates.y;
-                    data.vb = v2.TextureCoordinates.y;
-                    data.vc = v1.TextureCoordinates.y;
-                    data.vd = v3.TextureCoordinates.y;
+                        data.va = v1.TextureCoordinates.y;
+                        data.vb = v2.TextureCoordinates.y;
+                        data.vc = v1.TextureCoordinates.y;
+                        data.vd = v3.TextureCoordinates.y;
+                    }
 
                     // scan p1p2 p1p3
                     this.processScanLine(data, v1, v2, v1, v3, color, texture);
@@ -356,15 +376,17 @@ export class Device {
                     data.ndotlc = nl1;
                     data.ndotld = nl3;
 
-                    data.ua = v2.TextureCoordinates.x;
-                    data.ub = v3.TextureCoordinates.x;
-                    data.uc = v1.TextureCoordinates.x;
-                    data.ud = v3.TextureCoordinates.x;
+                    if (v1.TextureCoordinates && v2.TextureCoordinates && v3.TextureCoordinates) {
+                        data.ua = v2.TextureCoordinates.x;
+                        data.ub = v3.TextureCoordinates.x;
+                        data.uc = v1.TextureCoordinates.x;
+                        data.ud = v3.TextureCoordinates.x;
 
-                    data.va = v2.TextureCoordinates.y;
-                    data.vb = v3.TextureCoordinates.y;
-                    data.vc = v1.TextureCoordinates.y;
-                    data.vd = v3.TextureCoordinates.y;
+                        data.va = v2.TextureCoordinates.y;
+                        data.vb = v3.TextureCoordinates.y;
+                        data.vc = v1.TextureCoordinates.y;
+                        data.vd = v3.TextureCoordinates.y;
+                    }
 
                     // scan p2p3 p1p3
                     this.processScanLine(data, v2, v3, v1, v3, color, texture);
@@ -374,9 +396,25 @@ export class Device {
     }
 
     public render(camera: Camera, meshes: Mesh[]) {
-        const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, BABYLON.Vector3.Up());
+        // glm::mat4 CameraMatrix = glm::lookAt(
+        //     cameraPosition, // the position of your camera, in world space
+        //     cameraTarget,   // where you want to look at, in world space
+        //     upVector        // probably glm::vec3(0,1,0), but (0,-1,0) would make you looking upside-down(倒置), which can be great too
+        // );
+        const viewMatrix = BABYLON.Matrix.LookAtLH(camera.position, camera.target, new BABYLON.Vector3(0, 1.0, 0));
 
-        const projectMatrix = BABYLON.Matrix.PerspectiveFovLH(0.78, this.workingWidth / this.workingHeight, 0.01, 1.0);
+        // Generates a really hard-to-read matrix, but a normal, standard 4x4 matrix nonetheless
+        // glm::mat4 projectionMatrix = glm::perspective(
+        //      // The vertical Field of View, in radians: the amount of "zoom".
+        //      //Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
+        //     glm::radians(FoV),
+        //      // Aspect Ratio. Depends on the size of your window. Notice that 4/3 == 800/600 == 1280/960,
+        //      //sounds familiar ?
+        //     4.0f / 3.0f,
+        //     0.1f,              // Near clipping plane. Keep as big as possible, or you'll get precision issues.
+        //     100.0f             // Far clipping plane. Keep as little as possible.
+        // );
+        const projectMatrix = BABYLON.Matrix.PerspectiveFovLH(1.5, this.workingWidth / this.workingHeight, 0.01, 100.0);
 
         for (const cMesh of meshes) {
             const worldMatrix = BABYLON.Matrix.RotationYawPitchRoll(
