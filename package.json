@@ -19,7 +19,7 @@
         "babelify": "^10.0.0",
         "browser-sync": "^2.26.7",
         "browserify": "^16.5.0",
-        "gulp": "3.9.1",
+        "gulp": "4",
         "gulp-util": "^3.0.8",
         "realpathify": "^1.0.1",
         "run-sequence": "^2.2.1",

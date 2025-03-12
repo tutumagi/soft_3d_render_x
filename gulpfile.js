@@ -21,54 +21,56 @@ let realpathify = require("realpathify");
 
 const DEBUG = true;
 
-if (watchify) {
-    const watchedBrowserify = watchify(
-        browserify({
-            basedir: workSpaceDir,
-            //是否开启调试，开启后会生成jsmap，方便调试ts源码，但会影响编译速度
-            debug: DEBUG,
-            entries: ["src/main.ts"],
-            cache: {},
-            packageCache: {}
-        })
-            .plugin(tsify, { target: "es5" })
-            .plugin(realpathify)
-            .transform(babelify.configure({ extensions: [".ts", ".js"] }))
-    );
+const watchedBrowserify = watchify(
+  browserify({
+    basedir: workSpaceDir,
+    //是否开启调试，开启后会生成jsmap，方便调试ts源码，但会影响编译速度
+    debug: DEBUG,
+    entries: ["src/main.ts"],
+    cache: {},
+    packageCache: {},
+  })
+    .plugin(tsify, { target: "es5" })
+    .plugin(realpathify)
+    .transform(babelify.configure({ extensions: [".ts", ".js"] }))
+);
 
-    // 记录watchify编译ts的时候是否出错，出错则不刷新浏览器
-    let isBuildError = false;
-    gulp.task("build", () => {
-        return watchedBrowserify
-            .bundle()
-            .on("error", (...args) => {
-                isBuildError = true;
-                gutil.log(...args);
-            })
-            .pipe(source("bundle.js"))
-            .pipe(gulp.dest(workSpaceDir + "/dist/"));
-    });
-
-    gulp.task("watch", ["build"], () => {
-        // 浏览器开发时自动刷新页面
-        browserSync.init({
-            port: 3002,
-            server: {
-                watchFiles: ["./dist/", "index.html"],
-                baseDir: "./"
-            }
-        });
-        //  watchify监听文件刷新
-        watchedBrowserify.on("update", () => {
-            isBuildError = false;
-            runSequence("build", () => {
-                if (!isBuildError) {
-                    // 没有编译错误时，刷新浏览器界面
-                    browserSync.reload();
-                }
-            });
-        });
-        // 打印watchify编译日志
-        watchedBrowserify.on("log", gutil.log);
-    });
+// 记录watchify编译ts的时候是否出错，出错则不刷新浏览器
+let isBuildError = false;
+function buildTask(done) {
+  watchedBrowserify
+    .bundle()
+    .on("error", (...args) => {
+      isBuildError = true;
+      gutil.log(...args);
+    })
+    .pipe(source("bundle.js"))
+    .pipe(gulp.dest(workSpaceDir + "/dist/"));
+  done();
 }
+
+function watchTask(done) {
+  // 浏览器开发时自动刷新页面
+  browserSync.init({
+    port: 3002,
+    server: {
+      watchFiles: ["./dist/", "index.html"],
+      baseDir: "./",
+    },
+  });
+  //  watchify监听文件刷新
+  watchedBrowserify.on("update", () => {
+    isBuildError = false;
+    runSequence("build", () => {
+      if (!isBuildError) {
+        // 没有编译错误时，刷新浏览器界面
+        browserSync.reload();
+      }
+    });
+  });
+  // 打印watchify编译日志
+  watchedBrowserify.on("log", gutil.log);
+  done();
+}
+
+exports.watch = gulp.series(buildTask, watchTask);
