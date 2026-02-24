@@ -883,9 +883,9 @@ blob@0.0.5:
   integrity sha1-1oDu7yX4zZGtUz9bAe7UjmTK9oM=
 
 bn.js@^4.0.0, bn.js@^4.1.0, bn.js@^4.1.1, bn.js@^4.4.0:
-  version "4.11.8"
-  resolved "https://registry.npm.taobao.org/bn.js/download/bn.js-4.11.8.tgz"
-  integrity sha1-LN4J617jQfSEdGuwMJsyU7GxRC8=
+  version "4.12.3"
+  resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-4.12.3.tgz#2cc2c679188eb35b006f2d0d4710bed8437a769e"
+  integrity sha512-fGTi3gxV/23FTYdAoUtLYp6qySe2KE3teyZitipKNRuVYcBkoP/bB3guXN/XVKUe9mxCHXnc9C4ocyz8OmgN0g==
 
 brace-expansion@^1.1.7:
   version "1.1.11"
